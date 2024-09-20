@@ -1,0 +1,29 @@
+---
+- name: check connectivity
+  ping:
+    data: alive
+
+- name: Install required packages for a ceph node
+  apt:
+    update_cache: yes
+    pkg:
+      - pip
+      - cephadm
+      - ceph-common
+    state: present
+
+- name: Copy /etc/hosts file
+  template:
+    src: ../../../vars/etchost.yaml
+    dest: /etc/hosts
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Create a directory for client configs
+  file:
+    state: directory
+    mode: 0700
+    owner: root
+    group: root
+    path: /root/clients

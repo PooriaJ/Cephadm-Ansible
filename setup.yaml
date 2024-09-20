@@ -1,0 +1,66 @@
+---
+- name: setting up Ceph object storage cluster
+  hosts: all
+  become: true
+  tasks:
+
+    - name: Include variables
+      include_vars: "all.yaml"
+
+    - name: Setting the basis on all nodes
+      include_role:
+        name: "{{ item }}"
+      with_items:
+        - $PWD/roles/base_setup
+        - $PWD/roles/os_tuning
+        - $PWD/roles/install_docker
+        - $PWD/roles/ceph_prerequisites
+
+    - name: Init the cluster
+      include_role:
+        name: "{{ item }}"
+      with_items:
+        - $PWD/roles/initialize_cluster
+      when: mode == 'mon' and init_cluster == 'true'
+
+    - name: Copy the pub key to every node
+      blockinfile:
+        path: /root/.ssh/authorized_keys
+        block: "{{ lookup('file', '/root/ceph.pub') }}"
+
+    - name: Ceph infrastructure setup
+      include_role:
+        name: "{{ item }}"
+      with_items:
+        - $PWD/roles/cluster_expansion
+      when: mode == 'mon' and init_cluster == 'true'
+
+    - name: Deploy Node exporter on all nodes
+      include_role:
+        name: "{{ item }}"
+      with_items:
+        - $PWD/roles/exporters/node_exporter
+
+    - name: First disable the default node exporter of ceph
+      shell:
+        cmd: ceph orch stop node-exporter
+      when: mode == 'mon'
+
+    - name: Remove the default node exporter of ceph
+      shell:
+        cmd: ceph orch rm node-exporter
+      when: mode == 'mon'
+
+    - name: Ceph monitoring
+      include_role:
+        name: "{{ item }}"
+      with_items:
+        - $PWD/roles/exporters/ceph_exporter
+      when: mode != 'monitoring'
+
+    - name: Create a client
+      include_role:
+        name: "{{ item }}"
+      with_items:
+        - $PWD/roles/create_client
+      when: mode == 'mon' and init_cluster == 'true'

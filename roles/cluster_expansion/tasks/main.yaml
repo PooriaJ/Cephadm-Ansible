@@ -1,0 +1,135 @@
+---
+- name: Check for connectivity
+  ping:
+    data: alive
+
+
+- name: Copy the scrip to add hosts to the server
+  copy:
+    src: files/adding_hosts.sh
+    dest: /root/adding_hosts.sh
+    mode: 0700
+    owner: root
+    group: root
+
+
+- name: Make the script executable
+  shell:
+    cmd: chmod +x /root/adding_hosts.sh
+
+
+- name: Run the script and add the hosts
+  shell:
+    cmd: /bin/bash /root/adding_hosts.sh
+
+- name: Introduce other mons to the cluster for higher redundancy
+  shell:
+    cmd: ceph orch apply mon --placement="mon-0,mon-1,mon-2"
+
+
+- name: Set MGR placement label
+  shell:
+    cmd: ceph orch apply mgr --placement="label:mon"
+
+- name: Add the additional disks to the cluster
+  shell:
+    cmd: |
+      ceph orch daemon add osd osd-0:{{ osd_disk_path }}
+      ceph orch daemon add osd osd-1:{{ osd_disk_path }}
+      ceph orch daemon add osd osd-2:{{ osd_disk_path }}
+
+
+- name: Enable functionality of RGWs on the cluster
+  shell:
+    cmd: ceph orch apply rgw {{ name_of_rgw }} --placement="2 label:rgw" --port={{ rgw_port }}
+
+
+- name: Pause for clsuter to setup the RGWs
+  pause:
+    seconds: 10
+
+
+- name: Introduce OSDs to the cluster
+  shell:
+    cmd: ceph orch apply osd --all-available-devices
+
+
+- name: Pause for clsuter to setup the OSDs
+  pause:
+    seconds: 30
+
+
+- name: Check if all hosts has been added successfully
+  shell:
+    cmd: ceph orch host ls
+  register: host_ls
+
+- name: Print out all hosts which the cluster knows as its components
+  debug:
+    var: host_ls
+
+
+
+- name: Get out the initial status of the cluster
+  shell:
+    cmd: "ceph status"
+  register: ceph_status
+
+- name: Print out the  status of the cluster
+  debug:
+    var: ceph_status
+
+
+- name: Check the pg stat
+  shell:
+    cmd: "ceph pg stat"
+  register: pg_stat
+
+- name: Print out the pg stat
+  debug:
+    var: pg_stat
+
+
+
+- name: Check if OSDs have been added to the cluster successfully
+  shell:
+    cmd: ceph osd tree
+  register: osd_tree
+
+- name: Print out the map of OSDs
+  debug:
+    var: osd_tree
+
+
+
+- name: Get the OSD stats of the cluster
+  shell:
+    cmd: ceph osd stat
+  register: osd_stat
+
+- name: Print out OSD stat
+  debug:
+    var: osd_stat
+
+
+
+- name: Check the storage capacity of OSDs
+  shell:
+    cmd: ceph osd df
+  register: ceph_df
+
+- name: Print out the Storage capacity
+  debug:
+    var: ceph_df
+
+- name: Get the status of mons and their quorum
+  shell:
+    cmd: ceph mon stat
+  register: mon_stat
+
+
+- name: Show the status of mons and their quorum
+  debug:
+    var: mon_stat
+
+

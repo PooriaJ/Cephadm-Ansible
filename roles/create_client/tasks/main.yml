@@ -1,0 +1,48 @@
+---
+- name: check connectivity
+  ping:
+    data: alive
+
+- name: Create a folder for the user
+  file:
+    path: /root/clients/{{ first_client }}
+    mode: 0744
+    owner: root
+    state: directory
+    group: root
+
+- name: Create the user and paste the output to a file
+  shell:
+    cmd: radosgw-admin user create --uid="{{ first_client }}" --display-name="{{ first_client }}" > /root/clients/{{ first_client }}/{{ first_client }}.json
+
+- name: Fetch the credentials of {{ first_client }} user in json
+  fetch:
+    src: /root/clients/{{ first_client }}/{{ first_client }}.json
+    dest: /root/{{ first_client }}.json
+    flat: yes
+
+- name: Extract the access key and secret key from the JSON file
+  set_fact:
+    access_key: "{{ output_json['keys'][0].access_key }}"
+    secret_key: "{{ output_json['keys'][0].secret_key }}"
+  vars:
+    output_json: "{{ lookup('file', '/root/{{ first_client }}.json') }}"
+
+- name: Print out the access key
+  debug:
+    var: access_key
+
+- name: Print out the secret key
+  debug:
+    var: secret_key
+
+- name: Create a config file for s3cmd
+  template:
+    src: templates/s3cfg.j2
+    dest: /root/clients/{{ first_client }}/s3cfg
+  vars:
+    secret_key: "{{ secret_key }}"
+    access_key: "{{ access_key }}"
+
+
+
